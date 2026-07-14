@@ -63,13 +63,12 @@ pip install -r requirements.txt
 ### 4. Add your Groq API key
 
 ```
-cd server
 cp .env.example .env
 ```
 
-Open `server/.env` and paste your key after `GROQ_API_KEYS=`. You can list
-multiple comma-separated keys for automatic rotation if one hits its free-tier
-rate limit.
+Open `.env` (project root — used for both local dev and Docker) and paste
+your key after `GROQ_API_KEYS=`. You can list multiple comma-separated keys
+for automatic rotation if one hits its free-tier rate limit.
 
 ### 5. Install frontend dependencies
 
