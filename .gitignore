@@ -1,0 +1,9 @@
+CLEAR-env/
+__pycache__/
+.env
+venv/
+node_modules/
+
+# Per-participant chat transcripts from the research study -- never commit
+# real conversation data. In Docker this path is a named volume anyway.
+server/chat_logs/

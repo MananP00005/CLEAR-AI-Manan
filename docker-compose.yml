@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      - GROQ_API_KEYS=${GROQ_API_KEYS}
+      - ALLOWED_ORIGINS=http://localhost
+      - CHAT_LOGS_DIR=chat_logs
+    volumes:
+      - chat_logs_data:/app/server/chat_logs
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+volumes:
+  chat_logs_data:

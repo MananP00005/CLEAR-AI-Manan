@@ -1,0 +1,25 @@
+# Training-only data, never needed to serve the app (1.8GB) and best.pt is
+# already committed separately at server/best.pt for inference.
+datasets/
+runs/
+best.pt
+
+# Python
+CLEAR-env/
+__pycache__/
+*.pyc
+
+# The pre-built Chroma vector store (server/chroma_db/) is intentionally
+# NOT excluded here. It's committed to the repo just like server/best.pt --
+# baking it into the image lets Docker seed the chroma_data volume with the
+# real ~123MB store on first mount, instead of re-embedding all of
+# server/docs/ from scratch, which takes hours on CPU.
+
+# Node / frontend build artifacts
+client/node_modules/
+client/dist/
+
+# VCS / editor
+.git/
+.gitignore
+.vscode/
