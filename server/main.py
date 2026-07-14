@@ -39,11 +39,6 @@ VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-
 # Speech-to-text (voice messages) — works in every browser, more accurate than the
 # browser's built-in recognition.
 STT_MODEL = os.getenv("GROQ_STT_MODEL", "whisper-large-v3-turbo")
-# Text-to-speech (spoken replies) — generated server-side so voice sounds the
-# same and actually works on every tablet/browser, instead of relying on each
-# device's own (often missing or broken) speech synthesis engine.
-TTS_MODEL = os.getenv("GROQ_TTS_MODEL", "canopylabs/orpheus-v1-english")
-TTS_VOICE = os.getenv("GROQ_TTS_VOICE", "hannah")
 
 # Where per-participant chat transcripts get saved (mounted as a Docker volume so
 # they survive container restarts and can be pulled straight off the host).
@@ -279,29 +274,6 @@ def groq_transcribe(filename, raw_bytes):
     raise OutOfTokens()
 
 
-def groq_speech(text: str) -> bytes:
-    """Turn a reply into spoken audio (WAV bytes) using Groq TTS, rotating keys.
-    Generating the voice server-side means it sounds the same and actually plays on
-    every tablet/browser, instead of depending on each device's own speech engine."""
-    clients = get_clients()
-    for i, client in enumerate(clients, start=1):
-        try:
-            response = client.audio.speech.create(
-                model=TTS_MODEL,
-                voice=TTS_VOICE,
-                input=text,
-                response_format="wav",
-            )
-            return response.read()
-        except RateLimitError:
-            print(f"[rate-limited] key #{i} / TTS is out of tokens, trying next...")
-            continue
-        except AuthenticationError:
-            print(f"[bad key] key #{i} rejected — skipping.")
-            continue
-    raise OutOfTokens()
-
-
 app = FastAPI(title="CLEAR-AI")
 
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
@@ -315,10 +287,6 @@ app.add_middleware(
 
 class SessionStartRequest(BaseModel):
     participant_id: str
-
-
-class SpeakRequest(BaseModel):
-    text: str
 
 
 @app.get("/")
@@ -434,9 +402,6 @@ async def transcribe(audio: UploadFile = File(...)):
         )
 
 
-_EMOJI_RE = re.compile("[\U0001F000-\U0001FAFF☀-➿]+")
-
-
 @app.post("/api/session/start")
 async def session_start(req: SessionStartRequest):
     """Called once when a child enters their participant ID, before the chat begins.
@@ -449,35 +414,6 @@ async def session_start(req: SessionStartRequest):
     is_new = not log_path(pid).exists()
     log_line(pid, "=== SESSION START ===")
     return {"ok": True, "participant_id": pid, "new_participant": is_new}
-
-
-@app.post("/api/tts")
-async def tts(req: SpeakRequest):
-    """Turn a reply into audio server-side (Groq TTS) so voice sounds the same and
-    reliably plays back on every tablet/browser via a plain <audio> tag, instead of
-    depending on each device's own (often missing) speech engine."""
-    try:
-        clean = _EMOJI_RE.sub("", req.text or "").strip()
-        if not clean:
-            return JSONResponse(status_code=400, content={"error": "Nothing to say."})
-        audio_bytes = groq_speech(clean[:2000])
-        b64 = base64.b64encode(audio_bytes).decode("utf-8")
-        return {"audio_url": f"data:audio/wav;base64,{b64}"}
-    except OutOfTokens:
-        return JSONResponse(
-            status_code=429,
-            content={"error": "Sprout's voice needs a little rest! 😴"},
-        )
-    except RuntimeError as e:
-        return JSONResponse(status_code=503, content={"error": str(e)})
-    except Exception as e:
-        print("\n=== TTS ERROR ===")
-        traceback.print_exc()
-        print("==================\n")
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Sprout's voice isn't working right now.", "detail": str(e)},
-        )
 
 
 @app.get("/api/health")

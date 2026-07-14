@@ -60,25 +60,19 @@ function toggleVoice() {
   localStorage.setItem('clearai-voice', voiceEnabled.value ? 'on' : 'off')
 }
 
-async function speak(text) {
+const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]+/gu
+
+function speak(text) {
   if (!text || isSpeaking.value) return
+  if (!('speechSynthesis' in window)) return
+  const clean = text.replace(EMOJI_RE, '').trim()
+  if (!clean) return
   isSpeaking.value = true
-  try {
-    const res = await fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'TTS failed')
-    const audio = new Audio(data.audio_url)
-    audio.onended = () => { isSpeaking.value = false }
-    audio.onerror = () => { isSpeaking.value = false }
-    await audio.play()
-  } catch (err) {
-    console.error('Speak failed:', err)
-    isSpeaking.value = false
-  }
+  window.speechSynthesis.cancel()
+  const utterance = new SpeechSynthesisUtterance(clean)
+  utterance.onend = () => { isSpeaking.value = false }
+  utterance.onerror = () => { isSpeaking.value = false }
+  window.speechSynthesis.speak(utterance)
 }
 
 function triggerFileInput() {
