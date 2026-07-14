@@ -1,25 +1,55 @@
+# CLEAR-AI (Sprout) — one-command Docker deployment.
+# Builds backend + frontend from their Dockerfiles and runs the app, reading
+# secrets from .env, plus a free public HTTPS link via Cloudflare Tunnel —
+# no manually running `cloudflared` by hand, no domain/cert needed.
+#
+# Usage on the server (inside the project folder):
+#   docker compose up -d --build      # build + start everything in the background
+#   docker compose logs -f            # watch logs from all services
+#   docker compose logs cloudflared   # find your public https://...trycloudflare.com link
+#   docker compose down               # stop and remove
+#   docker compose up -d --build      # re-run after a git pull to update
+#
 services:
   backend:
     build:
       context: .
       dockerfile: server/Dockerfile
+    container_name: clear-ai-backend
+    restart: unless-stopped
+    env_file:
+      - .env          # provides GROQ_API_KEYS (comma-separated for rotation)
     environment:
-      - GROQ_API_KEYS=${GROQ_API_KEYS}
       - ALLOWED_ORIGINS=http://localhost
       - CHAT_LOGS_DIR=chat_logs
     volumes:
-      - chat_logs_data:/app/server/chat_logs
-    restart: unless-stopped
+      # Per-participant chat transcripts (.txt) land here on the HOST, so they
+      # survive `docker compose down`/rebuilds and you can grab them straight
+      # from ./chat_logs.
+      - ./chat_logs:/app/server/chat_logs
 
   frontend:
     build:
       context: .
       dockerfile: client/Dockerfile
+    container_name: clear-ai-frontend
+    restart: unless-stopped
     depends_on:
       - backend
     ports:
+      # host_port:container_port -> reachable on the VM itself at :80 if you
+      # ever want to check it directly; the public link below doesn't need
+      # this port opened in any firewall.
       - "80:80"
-    restart: unless-stopped
 
-volumes:
-  chat_logs_data:
+  # Free HTTPS via Cloudflare Quick Tunnel. Gives a public
+  # https://...trycloudflare.com link pointing at the frontend, without
+  # opening any inbound port on the server. No account/domain/cert required.
+  # After starting, get your link with: docker compose logs cloudflared
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: clear-ai-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://frontend:80
+    depends_on:
+      - frontend
